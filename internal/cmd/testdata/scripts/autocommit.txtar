@@ -1,0 +1,63 @@
+[!exec:git] skip 'git not found in $PATH'
+
+mkgitconfig
+mkhomedir golden
+mkhomedir
+
+exec chezmoi init
+
+# test that chezmoi add creates and pushes a commit
+exec chezmoi add $HOME${/}.file
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'Add \.file'
+
+# test that chezmoi edit creates and pushes a commit
+exec chezmoi edit $HOME${/}.file
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'Update \.file'
+
+# test that chezmoi chattr creates and pushes a commit
+exec chezmoi chattr +executable $HOME${/}.file
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'Change attributes of \.file'
+
+# test that chezmoi add on a directory creates and pushes a commit
+exec chezmoi add $HOME${/}.dir
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'Add \.dir/file'
+
+# test that chezmoi chattr on a file in a directory creates and pushes a commit
+exec chezmoi chattr --debug +private $HOME${/}.dir/file
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'Change attributes of \.dir'
+
+# test that chezmoi forget creates and pushes a commit
+exec chezmoi forget --force $HOME${/}.file
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'Remove \.file'
+
+# test that chezmoi edit uses a custom commit message template
+appendline $CHEZMOICONFIGDIR/chezmoi.toml '    commitMessageTemplate = "{{ .prefix }}my commit message"'
+exec chezmoi edit $HOME${/}.dir${/}file
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'feat: my commit message'
+
+# test that only one of git.commitMessageTemplate and git.commitMessageTemplateFile can be set
+appendline $CHEZMOICONFIGDIR/chezmoi.toml '    commitMessageTemplateFile = ".COMMIT_MESSAGE.tmpl"'
+! exec chezmoi edit $HOME${/}.dir${/}file
+stderr 'cannot specify both git.commitMessageTemplate and git.commitMessageTemplateFile'
+removeline $CHEZMOICONFIGDIR/chezmoi.toml '    commitMessageTemplate = "{{ .prefix }}my commit message"'
+
+# test that chezmoi edit uses a custom commit message template file
+exec chezmoi edit $HOME${/}.dir${/}file
+exec git --git-dir=$CHEZMOISOURCEDIR/.git show HEAD
+stdout 'feat: my commit message file'
+removeline $CHEZMOICONFIGDIR/chezmoi.toml '    commitMessageTemplateFile = ".COMMIT_MESSAGE.tmpl"'
+
+-- home/user/.config/chezmoi/chezmoi.toml --
+[data]
+    prefix = "feat: "
+[git]
+    autoCommit = true
+-- home/user/.local/share/chezmoi/.COMMIT_MESSAGE.tmpl --
+{{ .prefix }}my commit message file
